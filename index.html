@@ -23,7 +23,7 @@
 
   <style>
     body { font-family: 'Prompt', sans-serif; background-color: #f3f4f6; }
-    .map-container { height: 350px; width: 100%; border-radius: 0.75rem; z-index: 1; }
+    .map-container { height: 360px; width: 100%; border-radius: 0.75rem; z-index: 1; }
     .summary-map { height: 550px; width: 100%; border-radius: 0.75rem; z-index: 1; }
     .leaflet-popup-content { font-family: 'Prompt', sans-serif; line-height: 1.5; }
   </style>
@@ -94,15 +94,29 @@
                 class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition">
             </div>
 
+            <!-- ช่องพิมพ์พิกัดรวม (วางจาก Google Maps ได้เลย) -->
+            <div class="bg-sky-50/70 border border-sky-200/80 rounded-xl p-3">
+              <label class="block text-xs font-semibold text-sky-900 mb-1">
+                <i class="fa-solid fa-paste mr-1"></i> พิมพ์หรือวางพิกัดรวม (Lat, Lng)
+              </label>
+              <input type="text" id="coordCombined" placeholder="เช่น 9.512017, 100.013593"
+                oninput="parseCombinedCoord()" onchange="parseCombinedCoord()"
+                class="w-full px-3 py-2 bg-white border border-sky-300 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-sm">
+              <p class="text-[11px] text-sky-700 mt-1">วางพิกัดที่คัดลอกมา ระบบจะแยก Lat/Lng และเลื่อนหมุดให้อัตโนมัติ</p>
+            </div>
+
+            <!-- ช่องพิมพ์แยก Lat / Lng -->
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">ละติจูด (Lat) <span class="text-red-500">*</span></label>
-                <input type="number" step="any" id="lat" required placeholder="9.512017" onchange="updateMarkerFromInput()"
+                <input type="text" inputmode="decimal" id="lat" required placeholder="9.512017"
+                  oninput="updateMarkerFromInput(false)" onchange="updateMarkerFromInput(true)"
                   class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm">
               </div>
               <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">ลองจิจูด (Lng) <span class="text-red-500">*</span></label>
-                <input type="number" step="any" id="lng" required placeholder="100.013593" onchange="updateMarkerFromInput()"
+                <input type="text" inputmode="decimal" id="lng" required placeholder="100.013593"
+                  oninput="updateMarkerFromInput(false)" onchange="updateMarkerFromInput(true)"
                   class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm">
               </div>
             </div>
@@ -118,7 +132,7 @@
           <div class="lg:col-span-7 flex flex-col">
             <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
               <label class="text-sm font-medium text-slate-700">
-                <i class="fa-solid fa-location-crosshairs text-red-500 mr-1"></i> คลิกบนแผนที่หรือลากหมุดเพื่อระบุพิกัด
+                <i class="fa-solid fa-location-crosshairs text-red-500 mr-1"></i> คลิกบนแผนที่ ลากหมุด หรือพิมพ์พิกัดด้านซ้าย
               </label>
               <button type="button" onclick="getCurrentLocation()" 
                 class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-300 transition flex items-center gap-1.5">
@@ -256,13 +270,11 @@
     let inputMap, inputMarker;
     let summaryMap, summaryMarkersGroup;
 
-    // ฟังก์ชันสร้าง Layer แผนที่ (ดาวเทียม Esri + ถนน OSM)
     function createBaseLayers() {
       const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri',
         maxZoom: 19
       });
-      // Layer ชื่อถนนซ้อนทับบนภาพดาวเทียม
       const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19
       });
@@ -276,20 +288,18 @@
       return { hybridGroup, street };
     }
 
-    // เริ่มต้นระบบเมื่อโหลดหน้าเว็บ
     document.addEventListener('DOMContentLoaded', () => {
       initInputMap();
       initSummaryMap();
       fetchData();
     });
 
-    // 1. ตั้งค่าแผนที่สำหรับหน้ากรอกข้อมูล
     function initInputMap() {
       const layers = createBaseLayers();
       inputMap = L.map('inputMap', {
         center: [DEFAULT_LAT, DEFAULT_LNG],
         zoom: 13,
-        layers: [layers.hybridGroup] // ค่าเริ่มต้นเป็นแผนที่ดาวเทียม
+        layers: [layers.hybridGroup]
       });
 
       L.control.layers({
@@ -297,23 +307,19 @@
         "แผนที่ถนน": layers.street
       }).addTo(inputMap);
 
-      // สร้างหมุดที่ลากได้
       inputMarker = L.marker([DEFAULT_LAT, DEFAULT_LNG], { draggable: true }).addTo(inputMap);
 
-      // อัปเดตตัวเลขเมื่อลากหมุด
       inputMarker.on('dragend', function(e) {
         const pos = e.target.getLatLng();
         setCoordInputs(pos.lat, pos.lng);
       });
 
-      // อัปเดตหมุดและตัวเลขเมื่อคลิกบนแผนที่
       inputMap.on('click', function(e) {
         inputMarker.setLatLng(e.latlng);
         setCoordInputs(e.latlng.lat, e.latlng.lng);
       });
     }
 
-    // 2. ตั้งค่าแผนที่สำหรับหน้าสรุป
     function initSummaryMap() {
       const layers = createBaseLayers();
       summaryMap = L.map('summaryMap', {
@@ -331,18 +337,48 @@
     }
 
     function setCoordInputs(lat, lng) {
-      document.getElementById('lat').value = Number(lat).toFixed(6);
-      document.getElementById('lng').value = Number(lng).toFixed(6);
+      const latStr = Number(lat).toFixed(6);
+      const lngStr = Number(lng).toFixed(6);
+      document.getElementById('lat').value = latStr;
+      document.getElementById('lng').value = lngStr;
+      document.getElementById('coordCombined').value = `${latStr}, ${lngStr}`;
     }
 
-    function updateMarkerFromInput() {
-      const lat = parseFloat(document.getElementById('lat').value);
-      const lng = parseFloat(document.getElementById('lng').value);
-      if (!isNaN(lat) && !isNaN(lng)) {
+    // แยกพิกัดจากช่องรวม เช่น "9.512017, 100.013593"
+    function parseCombinedCoord() {
+      const raw = document.getElementById('coordCombined').value.trim();
+      const matches = raw.match(/-?\d+(?:\.\d+)?/g);
+      if (matches && matches.length >= 2) {
+        const lat = parseFloat(matches[0]);
+        const lng = parseFloat(matches[1]);
+        if (isValidLatLng(lat, lng)) {
+          document.getElementById('lat').value = matches[0];
+          document.getElementById('lng').value = matches[1];
+          inputMarker.setLatLng([lat, lng]);
+          inputMap.setView([lat, lng], 16);
+        }
+      }
+    }
+
+    // อัปเดตหมุดเมื่อพิมพ์ Lat หรือ Lng เอง
+    function updateMarkerFromInput(shouldZoom = true) {
+      const latRaw = document.getElementById('lat').value.trim();
+      const lngRaw = document.getElementById('lng').value.trim();
+      const lat = parseFloat(latRaw);
+      const lng = parseFloat(lngRaw);
+
+      if (isValidLatLng(lat, lng)) {
+        document.getElementById('coordCombined').value = `${latRaw}, ${lngRaw}`;
         const newLatLng = new L.LatLng(lat, lng);
         inputMarker.setLatLng(newLatLng);
-        inputMap.setView(newLatLng, 16);
+        if (shouldZoom) {
+          inputMap.setView(newLatLng, 16);
+        }
       }
+    }
+
+    function isValidLatLng(lat, lng) {
+      return !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
     }
 
     function getCurrentLocation() {
@@ -361,13 +397,12 @@
           inputMap.setView([lat, lng], 17);
         },
         (err) => {
-          Swal.fire('ไม่สามารถดึงพิกัดได้', 'กรุณาเปิดสิทธิ์เข้าถึงตำแหน่ง (Location) หรือคลิกเลือกบนแผนที่แทน', 'warning');
+          Swal.fire('ไม่สามารถดึงพิกัดได้', 'กรุณาเปิดสิทธิ์เข้าถึงตำแหน่ง (Location) พิมพ์พิกัด หรือคลิกเลือกบนแผนที่แทน', 'warning');
         },
         { enableHighAccuracy: true }
       );
     }
 
-    // สลับแท็บ
     function switchTab(tabName) {
       const formSec = document.getElementById('tab-form');
       const sumSec = document.getElementById('tab-summary');
@@ -392,7 +427,6 @@
       }
     }
 
-    // ดึงข้อมูลจาก Google Sheet
     async function fetchData() {
       try {
         const response = await fetch(SCRIPT_URL);
@@ -412,7 +446,6 @@
       }
     }
 
-    // แสดงข้อมูลในตาราง
     function renderTable(records) {
       const tbody = document.getElementById('tableBody');
       if (records.length === 0) {
@@ -432,7 +465,7 @@
             <a href="tel:${item.phone}" class="hover:text-sky-600"><i class="fa-solid fa-phone text-xs mr-1 text-slate-400"></i>${item.phone}</a>
           </td>
           <td class="py-3 px-4 text-xs text-slate-500 whitespace-nowrap">
-            ${Number(item.lat).toFixed(5)}, ${Number(item.lng).toFixed(5)}
+            ${Number(item.lat).toFixed(6)}, ${Number(item.lng).toFixed(6)}
           </td>
           <td class="py-3 px-4 text-center whitespace-nowrap">
             <button onclick='editRecord(${JSON.stringify(item)})' 
@@ -444,7 +477,6 @@
       `).join('');
     }
 
-    // ค้นหาในตาราง
     function filterTable() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
       const filtered = allRecords.filter(item => 
@@ -456,7 +488,6 @@
       renderTable(filtered);
     }
 
-    // นำข้อมูลขึ้นฟอร์มเพื่อแก้ไข
     function editRecord(item) {
       document.getElementById('recordId').value = item.id;
       document.getElementById('businessName').value = item.businessName;
@@ -464,9 +495,9 @@
       document.getElementById('phone').value = item.phone;
       document.getElementById('lat').value = item.lat;
       document.getElementById('lng').value = item.lng;
+      document.getElementById('coordCombined').value = `${item.lat}, ${item.lng}`;
       document.getElementById('note').value = item.note || '';
 
-      // อัปเดต UI เป็นโหมดแก้ไข
       document.getElementById('form-title').innerHTML = `<i class="fa-solid fa-pen-to-square text-amber-500"></i> แก้ไขข้อมูลคำร้อง`;
       document.getElementById('edit-badge').classList.remove('hidden');
       document.getElementById('display-edit-id').innerText = item.id;
@@ -476,7 +507,6 @@
       submitBtn.innerHTML = `<i class="fa-solid fa-check"></i> บันทึกการแก้ไข`;
       submitBtn.className = "px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-sm transition flex items-center gap-2";
 
-      // ย้ายหมุดแผนที่
       const pos = [Number(item.lat), Number(item.lng)];
       inputMarker.setLatLng(pos);
       inputMap.setView(pos, 17);
@@ -484,10 +514,10 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // รีเซ็ตฟอร์มกลับเป็นโหมดเพิ่มใหม่
     function resetForm() {
       document.getElementById('requestForm').reset();
       document.getElementById('recordId').value = '';
+      document.getElementById('coordCombined').value = '';
       
       document.getElementById('form-title').innerHTML = `<i class="fa-solid fa-file-circle-plus text-sky-600"></i> ยื่นคำร้องใหม่`;
       document.getElementById('edit-badge').classList.add('hidden');
@@ -501,11 +531,18 @@
       inputMap.setView([DEFAULT_LAT, DEFAULT_LNG], 13);
     }
 
-    // บันทึกข้อมูล (สร้างใหม่ / แก้ไข)
     async function handleFormSubmit(e) {
       e.preventDefault();
       const recordId = document.getElementById('recordId').value;
       const isEdit = recordId !== '';
+
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lng = parseFloat(document.getElementById('lng').value);
+
+      if (!isValidLatLng(lat, lng)) {
+        Swal.fire('พิกัดไม่ถูกต้อง', 'กรุณาตรวจสอบค่าละติจูด (-90 ถึง 90) และลองจิจูด (-180 ถึง 180)', 'warning');
+        return;
+      }
 
       const payload = {
         action: isEdit ? 'update' : 'create',
@@ -513,8 +550,8 @@
         businessName: document.getElementById('businessName').value.trim(),
         coordinator: document.getElementById('coordinator').value.trim(),
         phone: document.getElementById('phone').value.trim(),
-        lat: parseFloat(document.getElementById('lat').value),
-        lng: parseFloat(document.getElementById('lng').value),
+        lat: lat,
+        lng: lng,
         note: document.getElementById('note').value.trim()
       };
 
@@ -548,7 +585,6 @@
       }
     }
 
-    // อัปเดตตัวเลขสรุป
     function updateStats() {
       document.getElementById('stat-total').innerText = allRecords.length;
       const validCoords = allRecords.filter(r => !isNaN(r.lat) && !isNaN(r.lng) && r.lat !== 0);
@@ -556,7 +592,6 @@
       document.getElementById('stat-latest').innerText = allRecords.length > 0 ? allRecords[0].timestamp : '-';
     }
 
-    // วาดหมุดทั้งหมดลงในแผนที่สรุป
     function renderSummaryMap() {
       if (!summaryMarkersGroup) return;
       summaryMarkersGroup.clearLayers();
@@ -574,7 +609,7 @@
               <p class="text-xs text-slate-600"><i class="fa-solid fa-phone w-4 text-slate-400"></i> <a href="tel:${item.phone}" class="text-sky-600 underline">${item.phone}</a></p>
               ${item.note ? `<p class="text-xs text-slate-500 mt-1 border-t pt-1"><b>หมายเหตุ:</b> ${item.note}</p>` : ''}
               <div class="mt-2 pt-1.5 border-t border-slate-100 flex justify-between items-center">
-                <span class="text-[11px] text-slate-400">${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
+                <span class="text-[11px] text-slate-400">${lat.toFixed(6)}, ${lng.toFixed(6)}</span>
                 <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" 
                    class="text-xs bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700">
                    <i class="fa-solid fa-diamond-turn-right mr-1"></i>นำทาง
